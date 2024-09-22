@@ -18,16 +18,16 @@ def folder_evol(g, m, L0, a, N, v, Q):
     path.mkdir(parents=True, exist_ok=True)
     return path
 
-@ray.remote(num_cpus=2)
-def run_gs(g, m, L0, a, N, D0, energy_tol=1e-12, Schmidt_tol=1e-10):
+@ray.remote(num_cpus=1)
+def run_gs(g, m, L0, a, N, D0, energy_tol=1e-12, Schmidt_tol=1e-10, t=0):
     """ initial state at t=0 """
     #
     folder = folder_gs(g, m, L0, a, N)
-    fname = folder / f"state_D={D0}.npy"
+    fname = folder / f"state_D={D0}_{t=:0.2f}.npy"
     finfo = folder / "info.csv"
     #
     e0 = a * g * g / 2
-    t = 0
+    # t = 0
     #
     ops = yastn.operators.Spin12(sym='U1')
     H0 = HXXZ(N, a, m, ops=ops)
@@ -56,21 +56,21 @@ def run_gs(g, m, L0, a, N, D0, energy_tol=1e-12, Schmidt_tol=1e-10):
     data["schmidt"] = [x.data for x in sch]
     np.save(fname, data, allow_pickle=True)
 
-    fieldnames = ["D", "energy", "sweeps", "denergy", "dSchmidt", "min_Schmidt"]
-    out = {"D" : max(data["bd"]),
-           "energy": info.energy,
-           "sweeps": info.sweeps,
-           "denergy": info.denergy,
-           "dSchmidt": info.max_dSchmidt,
-           "min_Schmidt": min(data["schmidt"][N // 2])}
-    file_exists = os.path.isfile(finfo)
-    with open(finfo, 'a', newline='') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=";")
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(out)
+    # fieldnames = ["D", "energy", "sweeps", "denergy", "dSchmidt", "min_Schmidt"]
+    # out = {"D" : max(data["bd"]),
+    #        "energy": info.energy,
+    #        "sweeps": info.sweeps,
+    #        "denergy": info.denergy,
+    #        "dSchmidt": info.max_dSchmidt,
+    #        "min_Schmidt": min(data["schmidt"][N // 2])}
+    # file_exists = os.path.isfile(finfo)
+    # with open(finfo, 'a', newline='') as csvfile:
+    #     writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=";")
+    #     if not file_exists:
+    #         writer.writeheader()
+    #     writer.writerow(out)
 
-@ray.remote(num_cpus=2)
+@ray.remote(num_cpus=8)
 def run_evol(g, m, L0, a, N, D0, v, Q, dt, snapthots):
     ops = yastn.operators.Spin12(sym='U1')
     #
@@ -98,6 +98,17 @@ def run_evol(g, m, L0, a, N, D0, v, Q, dt, snapthots):
                           method='2site', opts_svd={"D_total": D0}):
         engs = measure_energy_per_site(psi, a, e0, m, step.tf, L0, v, Q, ops)
         ents = psi.get_entropy()
+
+        data = {}
+        data["psi"] = psi.save_to_dict()
+        data["bd"] = psi.get_bond_dimensions()
+        data["entropy"] = ents
+        sch = psi.get_Schmidt_values()
+        data["schmidt"] = [x.data for x in sch]
+        np.save(folder / f"state_t={step.tf:0.2f}.npy", data, allow_pickle=True)
+
+        with open(folder / "min_schmidt.txt", "a") as f:
+            f.write(f"{step.tf:0.2f};{min(data['schmidt'][N // 2]):12f}\n")
 
         deng = engs - engs_gs
         with open(folder / "engs.txt", "a") as f:
@@ -127,14 +138,15 @@ if __name__ == "__main__":
 
     # refs = []
     # for m in [0*g, 0.125 * g, 0.25 * g, 0.5 * g]:
-    #     for N, a in [(100, 1.0), (200, 0.5), (400, 0.25)]:
-    #         job = run_gs.remote(g, m, L0, a, N, D0, energy_tol=1e-12, Schmidt_tol=1e-8)
+    #     for N, a in [(400, 0.25)]:  # [(100, 1.0), (200, 0.5), (400, 0.25)]:
+    #       for t in [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]:
+    #         job = run_gs.remote(g, m, L0, a, N, D0, energy_tol=1e-12, Schmidt_tol=1e-8, t=t)
     #         refs.append(job)
     # ray.get(refs)
 
     refs = []
-    for m in [0*g, 0.125 * g, 0.25 * g, 0.5 * g]:
-        for N, a in [(100, 1.0), (200, 0.5), (400, 0.25)]:
-            job = run_evol.remote(g, m, L0, a, N, D0, 1, 1, 1/8, N // 2)
+    for m in [0 * g, 0.125 * g, 0.25 * g, 0.5 * g]:
+        for N, a in [(400, 0.25)]:  # [(100, 1.0), (200, 0.5), (400, 0.25)]:
+            job = run_evol.remote(g, m, L0, a, N, D0, 1/4, 1, 1/8, N // 8)
             refs.append(job)
     ray.get(refs)
