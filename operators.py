@@ -62,6 +62,45 @@ def sumLn2(N, t, L0, a, v, Q, ops=None):
                                                         (2, 2): I}, common_legs=(1, 3))
     return H
 
+def boost(N, a, g, m, L0, ops=None):
+    """ n (sp sm + sm sp) + n * Z + sum_{n=0}^{N-2} n Ln^2 """
+    I, Sp, Sm = ops.I(), ops.sp(), ops.sm()
+    d = {0: Sp @ Sm, 1: Sm @ Sp}
+    terms =  [mps.Hterm(n / (2 * a), (n, n + 1), (Sp, Sm)) for n in range(N - 1)]
+    terms += [mps.Hterm(n / (2 * a), (n, n + 1), (Sm, Sp)) for n in range(N - 1)]
+    terms += [mps.Hterm(n * m, (n,), (d[n % 2],)) for n in range(N)]
+    HI = mps.product_mpo(I, N)
+    H1 = mps.generate_mpo(HI, terms)
+    #
+    I = I.add_leg(axis=0, s=-1).add_leg(axis=2, s=1)
+    d[0] = d[0].add_leg(axis=0, s=-1).add_leg(axis=2, s=1)
+    d[1] = d[1].add_leg(axis=0, s=-1).add_leg(axis=2, s=1)
+    #
+    H2 = mps.Mpo(N)
+    #
+    # This encodes Hamiltonian of the form sum_{n<n'} A_n B_n' + sum_n C_n
+    #
+    e0 = a * g * g / 2
+    for n in range(N):
+        An = ((-1) ** n) * d[n % 2]
+        Bn = ((-1) ** n) * (N - 1 - n) * (N - 2 + n) * d[n % 2]
+        Cn = (N - 1 - n) * (N - 2 + n) * (((-1) ** n) * L0 + 0.5)
+        Cn = Cn * d[n % 2]
+        if n < N - 1:
+            Cn = Cn + (n * L0 * L0) * I
+        if n == 0:
+            H2[n] = yastn.block({(0, 0): I, (0, 1): An, (0, 2): Cn}, common_legs=(1, 3))
+        elif n == N - 1:
+            H2[n] = yastn.block({(0, 2): Cn,
+                                 (1, 2): Bn,
+                                 (2, 2): I}, common_legs=(1, 3))
+        else:
+            H2[n] =  yastn.block({(0, 0): I, (0, 1): An, (0, 2): Cn,
+                                             (1, 1): I,  (1, 2): Bn,
+                                                         (2, 2): I}, common_legs=(1, 3))
+    return [H1, e0 * H2]
+
+
 def Ln(n, N, t, L0, a, v, Q, ops=None):
     I, Sp, Sm = ops.I(), ops.sp(), ops.sm()
     d = {0: Sp @ Sm, 1: Sm @ Sp}
