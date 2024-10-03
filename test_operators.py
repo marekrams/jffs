@@ -1,11 +1,10 @@
 import yastn
-import yastn.tn.mps as mps
 from operators import sumLn2, Ln, boost
 
 
 def test_sumLn(N):
     ops = yastn.operators.Spin12(sym='U1')
-    for t, a, L0 in [(2, 1, 0), (5, 0.25, 2)]:
+    for t, a, L0 in [(2, 1, 0), (4.5, 0.25, 2)]:
 
         H1 = sumLn2(N, t=t, L0=L0, a=a, v=1, Q=1, ops=ops)
         tmp = Ln(0, N, t=t, L0=L0, a=a, v=1, Q=1, ops=ops)
@@ -34,6 +33,15 @@ def test_boost(N):
         assert (H2 - LL).norm() < 1e-13 * H2.norm()
 
 
+def test_dn():
+    ops = yastn.operators.Spin12(sym='U1')
+    I, Sp, Sm, Z = ops.I(), ops.sp(), ops.sm(), ops.z()
+
+    assert ((I + Z) / 2 - (Sp @ Sm)).norm() < 1e-13
+    assert ((I - Z) / 2 - (Sm @ Sp)).norm() < 1e-13
+
+
 if __name__ == "__main__":
     test_sumLn(N=10)
     test_boost(N=10)
+    test_dn()
