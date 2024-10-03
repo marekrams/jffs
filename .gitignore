@@ -1,6 +1,6 @@
-results/
+results_old/
 plots/
-*.txt
+*.npy
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
