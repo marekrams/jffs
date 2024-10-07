@@ -9,8 +9,9 @@ from operators import dQn
 
 # ADDITIONAL PLOTS:
 
-# Energy profiles at t=45 for various lattice spacing
-# energy value at x=0 as a function of time
+# Energy profiles at t=45 for various lattice spacing (CHECK WITH ANALYTIC)
+# energy profile detailed check (CHECK WITH ANALYTIC)
+# energy value at x=0 as a function of time (CHECK WITH ANALYTIC)
 # electric field value at x=0 as a function of time (CHECK WITH ANALYTIC)
 # Electric field profile at t=45 (CHECK WITH ANALYTIC)
 # J0 profile at t=45  (CHECK WITH ANALYTIC)
@@ -80,12 +81,56 @@ for k in [0, 2]:
     plt.axvline(-t, color='k', alpha=0.15)
     # plt.axhline(0, color='k')
 
+    if k==0:
+        subset = (np.abs(xs)<44)
+        x = xs[subset]
+        arg = np.sqrt(t**2 - x**2)
+
+        enprofile = 0.5*mb**2*np.pi*( jv(0, mb*arg)**2 + (t**2 + x**2)/(t**2 - x**2) * jv(1, mb*arg)**2  )
+
+        plt.plot(x, enprofile, color='k', linestyle='dashed', label='analytical')
+
+
+
     plt.legend()
     plt.title(f"Energy profile  {m/g=:0.2f} {t=:0.1f}")
     plt.xticks(xticks)
 
     plt.xlabel('x')
     plt.ylabel(f'Energy(x, {t=:0.1f})')
+
+# energy profile detailed check
+
+m = 0
+k0 = 45*2
+N, a = Nas[-1]
+
+ee = engs[m, N][:, 1:] - engs[m, N][0, 1:]
+tm = engs[m, N][:, 0]
+ee1 = (ee[:, 0::2] + ee[:, 1::2]) /(2*a)  #  here we calculate mean of sites 2*l and 2*l+1
+
+xs = np.linspace(-50, 50, N//2)
+subset = (np.abs(xs)<35)
+
+plt.figure()
+
+plt.plot(xs[subset], ee1[k0][subset], label='m/g=0.00')
+
+t = tm[k0]
+x = xs[subset]
+arg = np.sqrt(t**2 - x**2)
+
+enprofile = 0.5*mb**2*np.pi*( jv(0, mb*arg)**2 + (t**2 + x**2)/(t**2 - x**2) * jv(1, mb*arg)**2  )
+
+plt.plot(x, enprofile, color='k', linestyle='dashed', label='analytical')
+
+plt.legend()
+plt.title(f"Energy profile detailed check {m/g=:0.2f} {t=:0.1f}")
+plt.xticks(xticks)
+
+plt.xlabel('x')
+plt.ylabel(f'Energy(x, {t=:0.1f})')
+
 
 
 # energy value at x=0 as a function of time
@@ -104,6 +149,12 @@ for m in ms:
     enmid = (ee1[:, NN//2] + ee1[:, NN//2-1])/2
 
     plt.plot(tm[:-1], enmid[:-1], label=f'{m/g=:0.2f}')
+
+
+ts = tm[:-1]
+enmid = 0.5*mb**2 *np.pi * (jv(0, mb*ts)**2 + jv(1, mb*ts)**2)
+plt.plot(ts, enmid, color='k', linestyle='dashed', label='analytical')
+
 
 plt.legend()
 plt.xlabel('t')
