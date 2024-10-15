@@ -256,9 +256,9 @@ for k in [0, 1, 2, 3]:
     plt.plot(xs, J0[k0], label=f'{m/g=:0.2f}')
 
 x = np.linspace(-45, 45, 100)
-j0anal = mb*x/np.sqrt(t**2 - x**2) * jv(1,mb*np.sqrt(t**2 - x**2))*a
+j0anal = mb*x/np.sqrt(t**2 - x**2) * jv(1,mb*np.sqrt(t**2 - x**2))
 
-plt.plot(x, -4*j0anal, color='k', linestyle='dashed', label='-4*bessel')
+plt.plot(x, -j0anal, color='k', linestyle='dashed', label='-bessel')
 
 
 plt.legend()
@@ -286,9 +286,9 @@ for k in [0, 1, 2, 3]:
 
 
 x = np.linspace(-45, 45, 100)
-j1anal = mb*t/np.sqrt(t**2 - x**2) * jv(1,mb*np.sqrt(t**2 - x**2))*a
+j1anal = mb*t/np.sqrt(t**2 - x**2) * jv(1,mb*np.sqrt(t**2 - x**2))
 
-plt.plot(x, 2*j1anal, color='k', linestyle='dashed', label='2*bessel')
+plt.plot(x, j1anal/2, color='k', linestyle='dashed', label='bessel/2')
 
 plt.legend()
 plt.xlabel('t')
@@ -366,8 +366,8 @@ for m in ms:
     plt.plot(tm, J1mid, label=f'{m/g=:0.2f}')
 
 
-j1anal = mb*jv(1,mb*tm)*a
-plt.plot(tm, 2*j1anal, color='k', linestyle='dashed', label='2*bessel')
+j1anal = mb*jv(1,mb*tm)
+plt.plot(tm, j1anal/2, color='k', linestyle='dashed', label='bessel/2')
 
 plt.legend()
 plt.xlabel('t')
