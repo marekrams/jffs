@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 from scipy.special import jv
 
-from run_evolution import folder_evol, folder_gs
+from run_evolution_fermions import folder_evol, folder_gs
 
 from load_data import *
 
@@ -13,7 +13,7 @@ xs = np.linspace(-50, 50, N//2)
 ts = Ln[m, N][:, 0]
 T = len(ts)
 
-x = np.zeros((T, N//2)) 
+x = np.zeros((T, N//2))
 t = np.zeros((T, N//2))
 
 x[:, :] = xs[np.newaxis, :]
