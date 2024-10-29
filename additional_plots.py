@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 
 from scipy.special import jv
 
-from run_evolution import folder_evol, folder_gs
-from operators import dQn
+from run_evolution_fermions import folder_evol, folder_gs
+from scripts_spins.operators import dQn
 
 
 # ADDITIONAL PLOTS:
@@ -66,7 +66,7 @@ for k in [0, 2]:
         tm = engs[m, N][:, 0]
         ee1 = (ee[:, 0::2] + ee[:, 1::2]) /(2*a)  #  here we calculate mean of sites 2*l and 2*l+1
         ee2 = (ee[:, :-1] + ee[:, 1:])/(2*a)
-        
+
         xs = np.linspace(-50, 50, N//2)
         xs2 = np.linspace(-50, 50, N-1)
 
