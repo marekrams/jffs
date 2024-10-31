@@ -5,8 +5,7 @@ from pathlib import Path
 import ray
 import yastn
 import yastn.tn.mps as mps
-from scripts_fermions.operators import HNN, sumLn2, Ln, momentum_total, momentum_n
-# , measure_energy_per_site, measure_T_per_site, measure_Ln, measure_currents
+from scripts_fermions.operators import HNN, sumLn2, measure_local_observables
 
 
 def folder_gs(g, m, a, N):
@@ -15,26 +14,24 @@ def folder_gs(g, m, a, N):
     return path
 
 
-def folder_evol(g, m, a, N, v, Q, D):
-    path = Path(f"./results_fermions/{g=:0.4f}/{m=:0.4f}/{N=}/{a=:0.4f}/{v=:0.4f}/{Q=:0.4f}/{D=}/")
+def folder_evol(g, m, a, N, v, Q, D0, dt, D, tol):
+    path = Path(f"./results_fermions/{g=:0.4f}/{m=:0.4f}/{N=}/{a=:0.4f}/{v=:0.4f}/{Q=:0.4f}/{D0=}/{dt=:0.4f}/{D=}/{tol=:0.0e}/")
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-@ray.remote(num_cpus=1)
-def run_gs(g, m, a, N, D0, energy_tol=1e-12, Schmidt_tol=1e-10, t=0):
+@ray.remote(num_cpus=4)
+def run_gs(g, m, a, N, D0, energy_tol=1e-10, Schmidt_tol=1e-8):
     """ initial state at t=0 """
     #
     folder = folder_gs(g, m, a, N)
     fname = folder / f"state_D={D0}.npy"
     finfo = folder / "info.csv"
     #
-    e0 = a * g * g / 2
-    t = 0
-    #
     ops = yastn.operators.SpinlessFermions(sym='U1')
     H0 = HNN(N, a, m, ops=ops)
-    H1 = e0 * sumLn2(N, t, a, v=1, Q=1, ops=ops)
+    e0 = a * g * g / 2
+    H1 = e0 * sumLn2(N, t=0, a=a, v=1, Q=1, ops=ops)
     #
     files = list(folder.glob("*.npy"))
     Ds = [int(f.stem.split("=")[1]) for f in files]
@@ -45,9 +42,9 @@ def run_gs(g, m, a, N, D0, energy_tol=1e-12, Schmidt_tol=1e-10, t=0):
         psi_gs = mps.load_from_dict(ops.config, old_data["psi"])
     else:
         print(f"Random initial state.")
-        psi_gs = mps.random_mps(H0, D_total=D0, n=0)
+        psi_gs = mps.random_mps(H0, D_total=D0, n=(N // 2))
     # 2 sweeps of 2-site dmrg
-    info = mps.dmrg_(psi_gs, [H0, H1], max_sweeps=500,
+    info = mps.dmrg_(psi_gs, [H0, H1], max_sweeps=200,
                      method='2site', opts_svd={"D_total": D0},
                      energy_tol=energy_tol, Schmidt_tol=Schmidt_tol)
     #
@@ -82,9 +79,9 @@ def add_line_to_file(fname, tf, data):
         f.write("\n")
 
 
-@ray.remote(num_cpus=2)
-def run_evol(g, m, a, N, D0, v, Q, dt, snapshots, snapshots_states):
-    ops = yastn.operators.Spin12(sym='U1')
+@ray.remote(num_cpus=4)
+def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, snapshots, snapshots_states):
+    ops = yastn.operators.SpinlessFermions(sym='U1')
     #
     try:
         fname = folder_gs(g, m, a, N) / f"state_D={D0}.npy"
@@ -94,33 +91,31 @@ def run_evol(g, m, a, N, D0, v, Q, dt, snapshots, snapshots_states):
         return None
     #
     e0 = a * g * g / 2
-    t = 0
-    engs_gs = measure_energy_per_site(psi, a, g, m, t, v, Q, ops)
-
-    folder = folder_evol(g, m, a, N, v, Q, D0)
-
-    ops = yastn.operators.Spin12(sym='U1')
-    H0 = HXXZ(N, a, m, ops=ops)
+    folder = folder_evol(g, m, a, N, v, Q, D0, dt, D, tol)
+    H0 = HNN(N, a, m, ops=ops)
     Ht = lambda t: [H0, e0 * sumLn2(N, t, a, v, Q, ops=ops)]
 
     times = np.linspace(0, N * a / (2 * v), snapshots + 1)
     sps = snapshots // snapshots_states
 
-    ii = 0
-    for step in mps.tdvp_(psi, Ht, times, dt=dt,
-                          method='2site', opts_svd={"D_total": D0}, yield_ti=True):
+    evol = mps.tdvp_(psi, Ht, times,
+                    method='2site', dt=dt,
+                    opts_svd={"D_total": D, "tol": tol},
+                    yield_initial=True)
 
-        engs = measure_energy_per_site(psi, a, g, m, step.tf, v, Q, ops)
-        ents = psi.get_entropy()
-        T00, T11, T01 = measure_T_per_site(psi, a, g, m, ops)
-        Ln = measure_Ln(psi, ops)
-        j0, j1 = measure_currents(psi, a, ops)
+    for ii, step in enumerate(evol):
+        ents1 = psi.get_entropy()
+        ents2 = psi.get_entropy(alpha=2)
+        ents3 = psi.get_entropy(alpha=3)
+        total_eng = mps.vdot(psi, Ht(step.tf), psi).real
+
+        T00, T11, T01, j0, j1, nu, Ln = measure_local_observables(psi, step.tf, a, g, m, v, Q, ops)
 
         if ii % sps == 0:
             data = {}
             data["psi"] = psi.save_to_dict()
             data["bd"] = psi.get_bond_dimensions()
-            data["entropy"] = ents
+            data["entropy"] = ents1
             sch = psi.get_Schmidt_values()
             data["schmidt"] = [x.data for x in sch]
             #
@@ -129,15 +124,17 @@ def run_evol(g, m, a, N, D0, v, Q, dt, snapshots, snapshots_states):
             with open(folder / "min_schmidt.txt", "a") as f:
                 f.write(f"{step.tf:0.2f};{min(data['schmidt'][N // 2]):12f}\n")
 
-        add_line_to_file(folder / "engs.txt", step.tf, engs - engs_gs)
-        add_line_to_file(folder / "ents.txt", step.tf, ents)
+        add_line_to_file(folder / "total_eng.txt", step.tf, [total_eng])
+        add_line_to_file(folder / "ents1.txt", step.tf, ents1)
+        add_line_to_file(folder / "ents2.txt", step.tf, ents2)
+        add_line_to_file(folder / "ents3.txt", step.tf, ents3)
         add_line_to_file(folder / "T00.txt", step.tf, T00)
         add_line_to_file(folder / "T01.txt", step.tf, T01)
         add_line_to_file(folder / "T11.txt", step.tf, T11)
         add_line_to_file(folder / "Ln.txt", step.tf, Ln)
         add_line_to_file(folder / "j0.txt", step.tf, j0)
         add_line_to_file(folder / "j1.txt", step.tf, j1)
-        ii += 1
+        add_line_to_file(folder / "nu.txt", step.tf, nu)
 
 
 if __name__ == "__main__":
@@ -146,15 +143,17 @@ if __name__ == "__main__":
     D0 = 64
 
     refs = []
-    for m in [0 * g, 0.1 * g, 0.318 * g, 1 * g]:
-        for N, a in [(100, 1.0)]: #, (200, 0.5), (400, 0.25)]:
+    for m in [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
+        for N, a in [(256, 0.5), (512, 0.25)]: #, (1024, 0.125), (1024, 0.25)]:
             job = run_gs.remote(g, m, a, N, D0)
             refs.append(job)
     ray.get(refs)
 
-    # refs = []
-    # for m in [0 * g, 0.1 * g, 0.318 * g, 1 * g]:
-    #     for N, a in [(100, 1.0), (200, 0.5), (400, 0.25)]:
-    #         job = run_evol.remote(g, m, a, N, D0, 1, 1, 1/8, 100, 20)
-    #         refs.append(job)
-    # ray.get(refs)
+    refs = []
+    v, Q = 1, 1
+    dt, D, tol = 1/8, 64, 1e-6
+    for m in [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
+        for N, a in [(256, 0.5), (512, 0.25)]: #, (1024, 0.125), (1024, 0.25)]:
+            job = run_evol.remote(g, m, a, N, D0, v, Q, dt, D, tol, 4 * N, 16)
+            refs.append(job)
+    ray.get(refs)

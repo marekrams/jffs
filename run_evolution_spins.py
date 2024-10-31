@@ -6,7 +6,7 @@ import time
 import ray
 import yastn
 import yastn.tn.mps as mps
-from scripts_fermions.operators import HXXZ, sumLn2, Ln, momentum_total, momentum_n, measure_energy_per_site, measure_T_per_site, measure_Ln, measure_currents
+from scripts_spins.operators import HXXZ, sumLn2, Ln, momentum_total, momentum_n, measure_energy_per_site, measure_T_per_site, measure_Ln, measure_currents
 
 def folder_gs(g, m, L0, a, N):
     path = Path(f"./results_spins/{g=:0.4f}/{m=:0.4f}/{L0=:d}/{N=}/{a=:0.4f}/gs/")

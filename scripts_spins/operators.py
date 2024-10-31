@@ -17,13 +17,14 @@ def HXXZ(N, a, m, ops=None):
     return H
 
 def Qp(n, t, n0, a, v, Q):
-    return Q * max(1 - abs(n0 + v * t / a - n), 0)
+    return Q * np.maximum(1 - np.abs(n0 + v * t / a - n), 0)
 
 def Qm(n, t, n0, a, v, Q):
-    return Q * max(1 - abs(n0 - v * t / a - n), 0)
+    return Q * np.maximum(1 - np.abs(n0 - v * t / a - n), 0)
 
 def dQn(n, t, n0, L0, a, v, Q):
-    return L0 + sum(Qp(k, t, n0, a, v, Q) - Qm(k, t, n0, a, v, Q) for k in range(n + 1))
+    ns = np.arange(n + 1, dtype=np.float64)
+    return L0 + np.sum(Qp(ns, t, n0, a, v, Q) - Qm(ns, t, n0, a, v, Q))
 
 def set_n0(N):
     return (N - 1) / 2
