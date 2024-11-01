@@ -153,9 +153,9 @@ if __name__ == "__main__":
     v, Q = 1, 1
     D, tol = 64, 1e-6
     for m in [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
-        for N, a in [(512, 0.25)]: #, (512, 0.25)]: #, (1024, 0.125), (1024, 0.25)]:
+        for N, a in [(1024, 0.25)]: #, (512, 0.25)]: #, (1024, 0.125), (1024, 0.25)]:
             snapshots = 2 * N
-            dt = min(1/8, a / (2 * v))
+            dt = min(1/8, N * a / (2 * v *  snapshots))
             job = run_evol.remote(g, m, a, N, D0, v, Q, dt, D, tol, snapshots, 16)
             refs.append(job)
     ray.get(refs)

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.special import jv
 from scipy.interpolate import CubicSpline
 
-from run_evolution_fermions import folder_evol, folder_gs
+from run_evolution import folder_evol, folder_gs
 
 from load_data import *
 
