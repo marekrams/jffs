@@ -20,7 +20,7 @@ def folder_evol(g, m, a, N, v, Q, D0, dt, D, tol):
     return path
 
 
-@ray.remote(num_cpus=4)
+@ray.remote(num_cpus=2)
 def run_gs(g, m, a, N, D0, energy_tol=1e-10, Schmidt_tol=1e-8):
     """ initial state at t=0 """
     #
@@ -70,14 +70,11 @@ def run_gs(g, m, a, N, D0, energy_tol=1e-10, Schmidt_tol=1e-8):
             writer.writeheader()
         writer.writerow(out)
 
-
-def add_line_to_file(fname, tf, data):
-    with open(fname, "a") as f:
-        f.write(f"{tf:0.3f}")
-        for ee in data:
-            f.write(f";{ee:0.8f}")
-        f.write("\n")
-
+def save_psi(fname, psi):
+    data = {}
+    data["psi"] = psi.save_to_dict()
+    data["bd"] = psi.get_bond_dimensions()
+    np.save(fname, data, allow_pickle=True)
 
 @ray.remote(num_cpus=4)
 def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, snapshots, snapshots_states):
@@ -98,43 +95,46 @@ def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, snapshots, snapshots_states):
     times = np.linspace(0, N * a / (2 * v), snapshots + 1)
     sps = snapshots // snapshots_states
 
+    data = {}
+    data['entropy_1'] = np.zeros((snapshots + 1, N + 1), dtype=np.float64)
+    data['entropy_2'] = np.zeros((snapshots + 1, N + 1), dtype=np.float64)
+    data['entropy_3'] = np.zeros((snapshots + 1, N + 1), dtype=np.float64)
+    data['Ln'] = np.zeros((snapshots + 1, N), dtype=np.float64)
+    data['T00'] = np.zeros((snapshots + 1, N), dtype=np.float64)
+    data['T11'] = np.zeros((snapshots + 1, N), dtype=np.float64)
+    data['T01'] = np.zeros((snapshots + 1, N - 2), dtype=np.float64)
+    data['j0'] = np.zeros((snapshots + 1, N // 2), dtype=np.float64)
+    data['j1'] = np.zeros((snapshots + 1, N // 2), dtype=np.float64)
+    data['nu'] = np.zeros((snapshots + 1, N // 2), dtype=np.float64)
+    data['energy'] = np.zeros(snapshots + 1, dtype=np.float64)
+    data['time'] = np.zeros(snapshots + 1, dtype=np.float64) - 1  # times not calculated are < 0
+    data['min_Schmidt'] = np.zeros(snapshots + 1, dtype=np.float64) - 1  # times not calculated are < 0
+
     evol = mps.tdvp_(psi, Ht, times,
                     method='2site', dt=dt,
                     opts_svd={"D_total": D, "tol": tol},
                     yield_initial=True)
 
     for ii, step in enumerate(evol):
-        ents1 = psi.get_entropy()
-        ents2 = psi.get_entropy(alpha=2)
-        ents3 = psi.get_entropy(alpha=3)
-        total_eng = mps.vdot(psi, Ht(step.tf), psi).real
+        data['time'][ii] = step.tf
+        data['entropy_1'][ii, :] = psi.get_entropy(alpha=1)
+        data['entropy_2'][ii, :] = psi.get_entropy(alpha=2)
+        data['entropy_3'][ii, :] = psi.get_entropy(alpha=3)
+        data['energy'][ii] = mps.vdot(psi, Ht(step.tf), psi).real
+        data["min_Schmidt"][ii] = min(psi.get_Schmidt_values()[N // 2].data)
 
         T00, T11, T01, j0, j1, nu, Ln = measure_local_observables(psi, step.tf, a, g, m, v, Q, ops)
+        data['T00'][ii, :] = T00
+        data['T11'][ii, :] = T11
+        data['T01'][ii, :] = T01
+        data['j0'][ii, :] = j0
+        data['j1'][ii, :] = j1
+        data['nu'][ii, :] = nu
+        data['Ln'][ii, :] = Ln
 
         if ii % sps == 0:
-            data = {}
-            data["psi"] = psi.save_to_dict()
-            data["bd"] = psi.get_bond_dimensions()
-            data["entropy"] = ents1
-            sch = psi.get_Schmidt_values()
-            data["schmidt"] = [x.data for x in sch]
-            #
-            np.save(folder / f"state_t={step.tf:0.2f}.npy", data, allow_pickle=True)
-            #
-            with open(folder / "min_schmidt.txt", "a") as f:
-                f.write(f"{step.tf:0.2f};{min(data['schmidt'][N // 2]):12f}\n")
-
-        add_line_to_file(folder / "total_eng.txt", step.tf, [total_eng])
-        add_line_to_file(folder / "ents1.txt", step.tf, ents1)
-        add_line_to_file(folder / "ents2.txt", step.tf, ents2)
-        add_line_to_file(folder / "ents3.txt", step.tf, ents3)
-        add_line_to_file(folder / "T00.txt", step.tf, T00)
-        add_line_to_file(folder / "T01.txt", step.tf, T01)
-        add_line_to_file(folder / "T11.txt", step.tf, T11)
-        add_line_to_file(folder / "Ln.txt", step.tf, Ln)
-        add_line_to_file(folder / "j0.txt", step.tf, j0)
-        add_line_to_file(folder / "j1.txt", step.tf, j1)
-        add_line_to_file(folder / "nu.txt", step.tf, nu)
+            np.save(folder / f"results.npy", data, allow_pickle=True)
+            save_psi(folder / f"state_t={step.tf:0.4f}.npy", psi)
 
 
 if __name__ == "__main__":
@@ -142,18 +142,20 @@ if __name__ == "__main__":
     g = 1 / 5
     D0 = 64
 
-    refs = []
-    for m in [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
-        for N, a in [(256, 0.5), (512, 0.25)]: #, (1024, 0.125), (1024, 0.25)]:
-            job = run_gs.remote(g, m, a, N, D0)
-            refs.append(job)
-    ray.get(refs)
+    # refs = []
+    # for m in [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
+    #     for N, a in [(256, 0.5), (512, 0.25), (1024, 0.125), (1024, 0.25)]:
+    #         job = run_gs.remote(g, m, a, N, D0)
+    #         refs.append(job)
+    # ray.get(refs)
 
     refs = []
     v, Q = 1, 1
-    dt, D, tol = 1/8, 64, 1e-6
+    D, tol = 64, 1e-6
     for m in [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
-        for N, a in [(256, 0.5), (512, 0.25)]: #, (1024, 0.125), (1024, 0.25)]:
-            job = run_evol.remote(g, m, a, N, D0, v, Q, dt, D, tol, 4 * N, 16)
+        for N, a in [(512, 0.25)]: #, (512, 0.25)]: #, (1024, 0.125), (1024, 0.25)]:
+            snapshots = 2 * N
+            dt = min(1/8, a / (2 * v))
+            job = run_evol.remote(g, m, a, N, D0, v, Q, dt, D, tol, snapshots, 16)
             refs.append(job)
     ray.get(refs)
