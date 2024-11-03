@@ -140,20 +140,20 @@ def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, snapshots, snapshots_states):
 if __name__ == "__main__":
     #
     g = 1 / 5
-    D0 = 64
+    D0 = 32
 
-    # refs = []
-    # for m in [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
-    #     for N, a in [(256, 0.5), (512, 0.25), (1024, 0.125), (1024, 0.25)]:
-    #         job = run_gs.remote(g, m, a, N, D0)
-    #         refs.append(job)
-    # ray.get(refs)
+    refs = []
+    for m in [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
+        for N, a in [(256, 0.5)]: #, (512, 0.25), (1024, 0.125), (1024, 0.25)]:
+            job = run_gs.remote(g, m, a, N, D0)
+            refs.append(job)
+    ray.get(refs)
 
     refs = []
     v, Q = 1, 1
-    D, tol = 64, 1e-6
+    D, tol = 32, 1e-6
     for m in [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
-        for N, a in [(1024, 0.25)]: #, (512, 0.25)]: #, (1024, 0.125), (1024, 0.25)]:
+        for N, a in [(256, 0.5)]: #, (512, 0.25)]: #, (1024, 0.125), (1024, 0.25)]:
             snapshots = 2 * N
             dt = min(1/8, N * a / (2 * v *  snapshots))
             job = run_evol.remote(g, m, a, N, D0, v, Q, dt, D, tol, snapshots, 16)
