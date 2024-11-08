@@ -14,13 +14,13 @@ def folder_gs(g, m, a, N):
     return path
 
 
-def folder_evol(g, m, a, N, v, Q, D0, dt, D, tol):
-    path = Path(f"./results_fermions/{g=:0.4f}/{m=:0.4f}/{N=}/{a=:0.4f}/{v=:0.4f}/{Q=:0.4f}/{D0=}/{dt=:0.4f}/{D=}/{tol=:0.0e}/")
+def folder_evol(g, m, a, N, v, Q, D0, dt, D, tol, method):
+    path = Path(f"./results_fermions/{g=:0.4f}/{m=:0.4f}/{N=}/{a=:0.4f}/{v=:0.4f}/{Q=:0.4f}/{D0=}/{dt=:0.4f}/{D=}/{tol=:0.0e}/{method}")
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-@ray.remote(num_cpus=2)
+@ray.remote(num_cpus=4)
 def run_gs(g, m, a, N, D0, energy_tol=1e-10, Schmidt_tol=1e-8):
     """ initial state at t=0 """
     #
@@ -77,7 +77,7 @@ def save_psi(fname, psi):
     np.save(fname, data, allow_pickle=True)
 
 @ray.remote(num_cpus=4)
-def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, snapshots, snapshots_states):
+def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, method, snapshots, snapshots_states):
     ops = yastn.operators.SpinlessFermions(sym='U1')
     #
     try:
@@ -88,7 +88,7 @@ def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, snapshots, snapshots_states):
         return None
     #
     e0 = a * g * g / 2
-    folder = folder_evol(g, m, a, N, v, Q, D0, dt, D, tol)
+    folder = folder_evol(g, m, a, N, v, Q, D0, dt, D, tol, method)
     H0 = HNN(N, a, m, ops=ops)
     Ht = lambda t: [H0, e0 * sumLn2(N, t, a, v, Q, ops=ops)]
 
@@ -111,7 +111,7 @@ def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, snapshots, snapshots_states):
     data['min_Schmidt'] = np.zeros(snapshots + 1, dtype=np.float64) - 1  # times not calculated are < 0
 
     evol = mps.tdvp_(psi, Ht, times,
-                    method='2site', dt=dt,
+                    method=method, dt=dt,
                     opts_svd={"D_total": D, "tol": tol},
                     yield_initial=True)
 
@@ -139,23 +139,23 @@ def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, snapshots, snapshots_states):
 
 if __name__ == "__main__":
     #
-    g = 1 / 5
-    D0 = 32
+    g = 0.5
+    D0 = 64
 
     refs = []
-    for m in [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
-        for N, a in [(256, 0.5)]: #, (512, 0.25), (1024, 0.125), (1024, 0.25)]:
+    for m in [0 * g, 0.2 * g, 0.318309886 * g, 0.5 * g]: # [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
+        for N, a in [(256, 0.25), (512, 0.125)]: #, (1024, 0.125), (1024, 0.25)]:
             job = run_gs.remote(g, m, a, N, D0)
             refs.append(job)
     ray.get(refs)
 
     refs = []
     v, Q = 1, 1
-    D, tol = 32, 1e-6
-    for m in [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
-        for N, a in [(256, 0.5)]: #, (512, 0.25)]: #, (1024, 0.125), (1024, 0.25)]:
+    D, tol = 64, 1e-6
+    for m in [0 * g, 0.2 * g, 0.318309886 * g, 0.5 * g]: # [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
+        for N, a in [(256, 0.25), (512, 0.125)]: #, (1024, 0.125), (1024, 0.25)]:
             snapshots = 2 * N
-            dt = min(1/8, N * a / (2 * v *  snapshots))
+            dt = min(1/32, N * a / (2 * v *  snapshots))
             job = run_evol.remote(g, m, a, N, D0, v, Q, dt, D, tol, snapshots, 16)
             refs.append(job)
     ray.get(refs)

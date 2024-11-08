@@ -103,15 +103,15 @@ def measure_local_observables_old(psi, t, a, g, m, v, Q, ops):
 
     T01 = np.zeros(N - 2, dtype=np.float64)
     for n in range(N - 2):
-        T01[n] = (-1j * (ecpcm[n, n+2] - ecpcm[n+2, n]) / (2 * a * a)).real
+        T01[n] = (-1j * (ecpcm[n, n+2] - ecpcm[n+2, n]) / (4 * a * a)).real
 
     j0 = np.zeros(N // 2, dtype=np.float64)
     j1 = np.zeros(N // 2, dtype=np.float64)
     nu = np.zeros(N // 2, dtype=np.float64)
     for n in range(N // 2):
-        j0[n] = (ed[2 * n] + ed[2 * n + 1]).real / a
-        j1[n] = (ecpcm[2 * n, 2 * n + 1] + ecpcm[2 * n + 1, 2 * n]).real / a
-        nu[n] = (ed[2 * n] - ed[2 * n + 1]).real / a
+        j0[n] = (ed[2 * n] + ed[2 * n + 1]).real / (2 * a)
+        j1[n] = (ecpcm[2 * n, 2 * n + 1] + ecpcm[2 * n + 1, 2 * n]).real / (2 * a)
+        nu[n] = (ed[2 * n] - ed[2 * n + 1]).real / (2 * a)
 
     Ln = np.zeros(N, dtype=np.float64)
     for n in range(N):
@@ -161,15 +161,15 @@ def measure_local_observables(psi, t, a, g, m, v, Q, ops):
 
     T01 = np.zeros(N - 2, dtype=np.float64)
     for n in range(N - 2):
-        T01[n] = (-1j * (ecpcm[n, n+2] - ecpcm[n+2, n]) / (2 * a * a)).real
+        T01[n] = (-1j * (ecpcm[n, n+2] - ecpcm[n+2, n]) / (4 * a * a)).real
 
     j0 = np.zeros(N // 2, dtype=np.float64)
     j1 = np.zeros(N // 2, dtype=np.float64)
     nu = np.zeros(N // 2, dtype=np.float64)
     for n in range(N // 2):
-        j0[n] = (ed[2 * n] + ed[2 * n + 1]) / a
-        j1[n] = (ecpcm[2 * n, 2 * n + 1] + ecpcm[2 * n + 1, 2 * n]).real / a
-        nu[n] = (ed[2 * n] - ed[2 * n + 1]) / a
+        j0[n] = (ed[2 * n] + ed[2 * n + 1]) / (2 * a)
+        j1[n] = (ecpcm[2 * n, 2 * n + 1] + ecpcm[2 * n + 1, 2 * n]).real / (2 * a)
+        nu[n] = (ed[2 * n] - ed[2 * n + 1]) / (2 * a)
 
     Ln = np.zeros(N, dtype=np.float64)
     cum_ed = 0
