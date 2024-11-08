@@ -1,5 +1,5 @@
 plots/
-state*.npy
+*.npy
 *.csv
 *.out
 

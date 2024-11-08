@@ -6,7 +6,7 @@ def plot_heatmaps(ev, title, data, Nas, ms, g, f_analytic=None, subtract_t0=True
     nx, ny = len(Nas), len(ms)
     if f_analytic:
         nx += 1
-    fig, ax = plt.subplots(nx, ny, sharex=True, sharey=True, figsize=(ny * 3, nx * 3))
+    fig, ax = plt.subplots(nx, ny, sharex=True, sharey=True, figsize=(ny * 3, nx * 3), squeeze=False)
 
     zmin, zmax = 0, 0
     for m in ms:
