@@ -1,4 +1,5 @@
 plots/
+results_fermions/
 *.npy
 *.csv
 *.out
