@@ -2,27 +2,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
-def plot_heatmaps(ev, title, data, Nas, ms, g, f_analytic=None, subtract_t0=True, avarage_nn=False):
-    nx, ny = len(Nas), len(ms)
+def plot_heatmaps(ev, title, data, NaDdt, ms, g, f_analytic=None, subtract_t0=True, avarage_nn=False):
+    nx, ny = len(NaDdt), len(ms)
     if f_analytic:
         nx += 1
-    fig, ax = plt.subplots(nx, ny, sharex=True, sharey=True, figsize=(ny * 3, nx * 3), squeeze=False)
+    fig, ax = plt.subplots(nx, ny, figsize=(ny * 3, nx * 3), squeeze=False)  # sharex=True, sharey=True,
 
     zmin, zmax = 0, 0
     for m in ms:
-        for N, a in Nas:
-            ee = data[m, N, a][ev][data[m, N, a]["time"] > -1]
+        for j, (N, a, D, dt) in enumerate(NaDdt):
+            ee = data[m, N, a, D, dt][ev][data[m, N, a, D, dt]["time"] > -1]
             ee = ee - ee[0, :]
             zmax = max(zmax, np.max(ee))
             zmin = min(zmin, np.min(ee))
     zlim = max(abs(zmin), abs(zmax))
 
     for i, m in enumerate(ms):
-        for j, (N, a) in enumerate(Nas):
-            tm = data[m, N, a]["time"]
+        for j, (N, a, D, dt) in enumerate(NaDdt):
+            tm = data[m, N, a, D, dt]["time"]
             mask = tm > -1
             tm = tm[mask]
-            ee = data[m, N, a][ev][mask]
+            ee = data[m, N, a, D, dt][ev][mask]
 
             if subtract_t0:
                 ee = ee - ee[0, :]
@@ -74,11 +74,11 @@ def plot_comparison(ev, times, data, Nas, m, g, f_analytic=None, subtract_t0=Tru
         ax[j].set_xlabel("position")
         ax[j].set_ylabel("T00 - T00(t=0)")
         for N, a in Nas:
-            tm = data[m, N, a]["time"]
+            tm = data[m, N, a, D, dt]["time"]
             ii = np.argmin(np.abs(tm - t_target))
             if abs(tm[ii] -  t_target) < 1e-6:
-                ee0 = data[m, N, a][ev][0]
-                ee = data[m, N, a][ev][ii]
+                ee0 = data[m, N, a, D, dt][ev][0]
+                ee = data[m, N, a, D, dt][ev][ii]
                 ns = a * (np.arange(len(ee0))) * (N / len(ee0))
                 ns = ns - np.mean(ns)
                 if subtract_t0:

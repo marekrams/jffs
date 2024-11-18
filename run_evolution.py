@@ -14,13 +14,14 @@ def folder_gs(g, m, a, N):
     return path
 
 
-def folder_evol(g, m, a, N, v, Q, D0, dt, D, tol, method):
+def folder_evol(g, m, a, N, v, Q, D0, dt, D, tol, method, mkdir=True):
     path = Path(f"./results_fermions/{g=:0.4f}/{m=:0.4f}/{N=}/{a=:0.4f}/{v=:0.4f}/{Q=:0.4f}/{D0=}/{dt=:0.4f}/{D=}/{tol=:0.0e}/{method}")
-    path.mkdir(parents=True, exist_ok=True)
+    if mkdir:
+        path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-@ray.remote(num_cpus=2)
+@ray.remote(num_cpus=4)
 def run_gs(g, m, a, N, D0, energy_tol=1e-10, Schmidt_tol=1e-8):
     """ initial state at t=0 """
     #
@@ -45,7 +46,7 @@ def run_gs(g, m, a, N, D0, energy_tol=1e-10, Schmidt_tol=1e-8):
         psi_gs = mps.random_mps(H0, D_total=D0, n=(N // 2))
     # 2 sweeps of 2-site dmrg
     info = mps.dmrg_(psi_gs, [H0, H1], max_sweeps=200,
-                     method='2site', opts_svd={"D_total": D0},
+                     method='2site', opts_svd={"D_total": D0, "tol": 1e-6},
                      energy_tol=energy_tol, Schmidt_tol=Schmidt_tol)
     #
     data = {}
@@ -76,7 +77,7 @@ def save_psi(fname, psi):
     data["bd"] = psi.get_bond_dimensions()
     np.save(fname, data, allow_pickle=True)
 
-@ray.remote(num_cpus=2)
+@ray.remote(num_cpus=6)
 def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, method, snapshots, snapshots_states):
     ops = yastn.operators.SpinlessFermions(sym='U1')
     #
@@ -139,26 +140,26 @@ def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, method, snapshots, snapshots_stat
 
 if __name__ == "__main__":
     #
-    g = 0.5
-    D0 = 64
+    g = 1.0
+    D0 = 256
 
     mg = [0, 0.1, 0.2, 0.318309886, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     ms = [g * x for x in mg]
 
     # refs = []
     # for m in ms: # [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
-    #     for N, a in [(512, 0.25), (512, 0.125)]: #, (1024, 0.125), (1024, 0.25)]:
+    #     for N, a in [(512, 0.125)]:  # [(512, 0.0625)]: #, (1024, 0.125), (1024, 0.25)]:
     #         job = run_gs.remote(g, m, a, N, D0)
     #         refs.append(job)
     # ray.get(refs)
 
     refs = []
     v, Q = 1, 1
-    D, tol, method = 64, 1e-6, '12site'
+    D, tol, method = 256, 1e-6, '12site'
     for m in ms: # [0 * g, 0.1 * g, 0.318309886 * g, 1 * g]:
-        for N, a in [(512, 0.25), (512, 0.125)]: #, (1024, 0.125), (1024, 0.25)]:
-            snapshots = 2 * N
-            dt = min(1/32, N * a / (2 * v *  snapshots))
+        for N, a in [(512, 0.125)]: #, (1024, 0.125), (1024, 0.25)]:
+            snapshots = N // 2
+            dt = min(1 / 16, N * a / (2 * v * snapshots))
             job = run_evol.remote(g, m, a, N, D0, v, Q, dt, D, tol, method, snapshots, 4)
             refs.append(job)
     ray.get(refs)
