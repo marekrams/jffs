@@ -1,8 +1,11 @@
+import argparse
 import numpy as np
+np.seterr(all='raise')
 import csv
 import os.path
 from pathlib import Path
-import ray
+import time
+#import ray
 import yastn
 import yastn.tn.mps as mps
 from scripts_fermions.operators import HNN, sumLn2, measure_local_observables
@@ -21,7 +24,7 @@ def folder_evol(g, m, a, N, v, Q, D0, dt, D, tol, method, mkdir=True):
     return path
 
 
-@ray.remote(num_cpus=6)
+# @ray.remote(num_cpus=9)
 def run_gs(g, m, a, N, D0, energy_tol=1e-10, Schmidt_tol=1e-8):
     """ initial state at t=0 """
     #
@@ -29,7 +32,7 @@ def run_gs(g, m, a, N, D0, energy_tol=1e-10, Schmidt_tol=1e-8):
     fname = folder / f"state_D={D0}.npy"
     finfo = folder / "info.csv"
     #
-    ops = yastn.operators.SpinlessFermions(sym='U1')
+    ops = yastn.operators.SpinlessFermions(sym='U1', tensordot_policy='no_fusion')
     H0 = HNN(N, a, m, ops=ops)
     e0 = a * g * g / 2
     H1 = e0 * sumLn2(N, t=0, a=a, v=1, Q=1, ops=ops)
@@ -37,7 +40,7 @@ def run_gs(g, m, a, N, D0, energy_tol=1e-10, Schmidt_tol=1e-8):
     files = list(folder.glob("*.npy"))
     Ds = [int(f.stem.split("=")[1]) for f in files]
     if any(D <= D0 for D in Ds):
-        D = min(D for D in Ds if D <= D0)
+        D = max(D for D in Ds if D <= D0)
         print(f"Loading initial state with {D=}")
         old_data = np.load(folder / f"state_D={D}.npy", allow_pickle=True).item()
         psi_gs = mps.load_from_dict(ops.config, old_data["psi"])
@@ -47,7 +50,7 @@ def run_gs(g, m, a, N, D0, energy_tol=1e-10, Schmidt_tol=1e-8):
     # 2 sweeps of 2-site dmrg
     info = mps.dmrg_(psi_gs, [H0, H1], max_sweeps=200,
                      method='2site', opts_svd={"D_total": D0, "tol": 1e-6},
-                     energy_tol=energy_tol, Schmidt_tol=Schmidt_tol)
+                     energy_tol=energy_tol, Schmidt_tol=Schmidt_tol, precompute=False)
     #
     data = {}
     data["psi"] = psi_gs.save_to_dict()
@@ -77,9 +80,9 @@ def save_psi(fname, psi):
     data["bd"] = psi.get_bond_dimensions()
     np.save(fname, data, allow_pickle=True)
 
-@ray.remote(num_cpus=6)
+# @ray.remote(num_cpus=9)
 def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, method, snapshots, snapshots_states):
-    ops = yastn.operators.SpinlessFermions(sym='U1')
+    ops = yastn.operators.SpinlessFermions(sym='U1', tensordot_policy='no_fusion')
     #
     try:
         fname = folder_gs(g, m, a, N) / f"state_D={D0}.npy"
@@ -114,8 +117,10 @@ def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, method, snapshots, snapshots_stat
     evol = mps.tdvp_(psi, Ht, times,
                     method=method, dt=dt,
                     opts_svd={"D_total": D, "tol": tol},
-                    yield_initial=True)
+                    yield_initial=True, precompute=False, subtract_E=True)
 
+    tref0 = time.time()
+    print(times)
     for ii, step in enumerate(evol):
         data['time'][ii] = step.tf
         data['entropy_1'][ii, :] = psi.get_entropy(alpha=1)
@@ -132,34 +137,34 @@ def run_evol(g, m, a, N, D0, v, Q, dt, D, tol, method, snapshots, snapshots_stat
         data['j1'][ii, :] = j1
         data['nu'][ii, :] = nu
         data['Ln'][ii, :] = Ln
+        print(f"t={step.tf:0.2f}  st={time.time() - tref0:0.1f} sek.")
 
         if ii % sps == 0:
             np.save(folder / f"results.npy", data, allow_pickle=True)
-            save_psi(folder / f"state_t={step.tf:0.4f}.npy", psi)
+            # save_psi(folder / f"state_t={step.tf:0.4f}.npy", psi)
 
 
 if __name__ == "__main__":
     #
-    g = 1.0
-    D0 = 256
-    #
-    mgs = [0, 0.1, 0.2, 0.318309886, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-    ms = [g * x for x in mgs]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-g", type=float, default=1.0)
+    parser.add_argument("-D0", type=int, default=256)
+    parser.add_argument("-mm", type=float, default=1.0)
+    parser.add_argument("-N", type=int, default=1024)
+    parser.add_argument("-a", type=float, default=0.125)
+    parser.add_argument("-Q", type=float, default=1.0)
 
-    refs = []
-    for m in ms:
-        for N, a in [(1024, 1 / 16)]:
-            job = run_gs.remote(g, m, a, N, D0)
-            refs.append(job)
-    ray.get(refs)
+    args = parser.parse_args()
+    print(args)
 
-    refs = []
-    v, Q = 1, 1
-    D, tol, method = D0, 1e-6, '12site'
-    for m in ms:
-        for N, a in [(1024, 1 / 16)]:
-            snapshots = N // 2
-            dt = min(1 / 16, N * a / (2 * v * snapshots))
-            job = run_evol.remote(g, m, a, N, D0, v, Q, dt, D, tol, method, snapshots, 4)
-            refs.append(job)
-    ray.get(refs)
+    tref0 = time.time()
+    run_gs(args.g, args.mm, args.a, args.N, args.D0)
+    print(f"GS found in: {time.time() - tref0}")
+
+    v = 1
+    D, tol, method = args.D0, 1e-6, '12site'
+    snapshots = args.N // 2
+    dt = min(1 / 16, args.N * args.a / (2 * v * snapshots))
+    tref0 = time.time()
+    run_evol(args.g, args.mm, args.a, args.N, args.D0, v, args.Q, dt, D, tol, method, snapshots, 4)
+    print(f"Evolution finished in: {time.time() - tref0}")

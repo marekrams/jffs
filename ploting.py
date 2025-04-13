@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
-def plot_heatmaps(ev, title, data, NaDdt, ms, g, f_analytic=None, subtract_t0=True, avarage_nn=False):
+def plot_heatmaps(ev, title, data, NaDdt, ms, g, f_analytic=None, subtract_t0=True, avarage_nn=False, tmax=None):
     nx, ny = len(NaDdt), len(ms)
     if f_analytic:
         nx += 1
@@ -11,32 +11,45 @@ def plot_heatmaps(ev, title, data, NaDdt, ms, g, f_analytic=None, subtract_t0=Tr
     zmin, zmax = 0, 0
     for m in ms:
         for j, (N, a, D, dt) in enumerate(NaDdt):
-            ee = data[m, N, a, D, dt][ev][data[m, N, a, D, dt]["time"] > -1]
-            ee = ee - ee[0, :]
-            zmax = max(zmax, np.max(ee))
-            zmin = min(zmin, np.min(ee))
+            try:
+                ee = data[m, N, a, D, dt][ev][data[m, N, a, D, dt]["time"] > -1]
+                ee = ee - ee[0, :]
+                zmax = max(zmax, np.max(ee))
+                zmin = min(zmin, np.min(ee))
+            except KeyError:
+                pass
+
     zlim = max(abs(zmin), abs(zmax))
 
     for i, m in enumerate(ms):
         for j, (N, a, D, dt) in enumerate(NaDdt):
-            tm = data[m, N, a, D, dt]["time"]
-            mask = tm > -1
-            tm = tm[mask]
-            ee = data[m, N, a, D, dt][ev][mask]
+            try:
+                tm = data[m, N, a, D, dt]["time"]
+                mask = tm > -1
+                tm = tm[mask]
+                ee = data[m, N, a, D, dt][ev][mask]
 
-            if subtract_t0:
-                ee = ee - ee[0, :]
-            if avarage_nn:
-                ee = (ee[:, 0::2] + ee[:, 1::2]) / 2  # avarage over 2*n and 2*n+1
+                if subtract_t0:
+                    ee = ee - ee[0, :]
+                if avarage_nn:
+                    ee = (ee[:, 0::2] + ee[:, 1::2]) / 2  # avarage over 2*n and 2*n+1
 
-            xmax = N * a / 2
-            im = ax[j, i].imshow(ee, extent=(-xmax, xmax, 0, tm[-1]),
-                                origin='lower', aspect='auto',
-                                vmin=-zlim, vmax=zlim,
-                                cmap = cm.seismic)
-            ax[j, i].set_title(f"{a=:0.2f} {m/g=:0.2f}")
-            ax[j, i].set_xticks([-xmax , -xmax / 2, 0, xmax / 2, xmax])
-            ax[j, i].set_ylim([0, xmax])
+                xmax = N * a / 2
+                im = ax[j, i].imshow(ee, extent=(-xmax, xmax, 0, tm[-1]),
+                                    origin='lower', aspect='auto',
+                                    vmin=-zlim, vmax=zlim,
+                                    cmap = cm.seismic)
+                ax[j, i].set_title(f"{a=:0.2f} {m/g=:0.2f} {N=} {D=}")
+                ax[j, i].set_xticks([-xmax , -xmax / 2, 0, xmax / 2, xmax])
+                ax[j, i].set_ylim([0, xmax])
+                if tmax:
+                    ax[j, i].set_ylim([0, tmax ])
+                    ax[j, i].set_xlim([-tmax, tmax])
+            except KeyError:
+                pass
+
+
+
 
     if f_analytic:
         N = 1024
@@ -65,7 +78,7 @@ def plot_heatmaps(ev, title, data, NaDdt, ms, g, f_analytic=None, subtract_t0=Tr
     fig.text(0.43, 1.00, title, ha='center')
 
 
-def plot_comparison(ev, times, data, Nas, m, g, f_analytic=None, subtract_t0=True, avarage_nn=False):
+def plot_comparison(ev, times, data, Nas, m, g, D, dt, f_analytic=None, subtract_t0=True, avarage_nn=False):
     nx, ny = 1, len(times)
     fig, ax = plt.subplots(nx, ny, sharex=True, sharey=True, figsize=(ny * 4, nx * 4))
 
@@ -87,10 +100,12 @@ def plot_comparison(ev, times, data, Nas, m, g, f_analytic=None, subtract_t0=Tru
                     ee = (ee[0::2] + ee[1::2]) / 2  # avarage over 2*n and 2*n+1
                     ns = (ns[0::2] + ns[1::2]) / 2  # avarage over 2*n and 2*n+1
                 ax[j].plot(ns, ee, label=f"{N=} {a=:0.3f}")
+            np.savetxt(f"{ev:s}_{m=}_{N=}_{a=}_t={t_target}.txt", np.column_stack([ns, ee]))
         if f_analytic:
             xmax = np.max(ns)
             x = np.linspace(-xmax, xmax, 1024)
             t = t_target
             ax[j].plot(x, f_analytic(g, t, x), '--', label='analytic')
+            np.savetxt(f"{ev:s}_analytic_t={t_target}.txt", np.column_stack([x, f_analytic(g, t, x)]))
         ax[j].legend()
     fig.tight_layout()

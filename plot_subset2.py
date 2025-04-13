@@ -211,7 +211,7 @@ for j, (N, a, D, dt) in enumerate(NaDdt):
 
         xmax = N * a / 2
         xs = np.linspace(-xmax, xmax, T00.shape[-1])
-        
+
         x = np.zeros_like(T00)
         t = np.zeros_like(T00)
         x[:, :] = xs[np.newaxis, :]
@@ -275,7 +275,7 @@ for j, (N, a, D, dt) in enumerate(NaDdt):
 
         xmax = N * a / 2
         xs = np.linspace(-xmax, xmax, T00.shape[-1])
-        
+
         x = np.zeros_like(T00)
         t = np.zeros_like(T00)
         x[:, :] = xs[np.newaxis, :]
@@ -350,7 +350,7 @@ for j, (N, a, D, dt) in enumerate(NaDdt):
 
         xmax = N * a / 2
         xs = np.linspace(-xmax, xmax, T00.shape[-1])
-        
+
 
 
         vt = 1
@@ -397,11 +397,11 @@ for j, (N, a, D, dt) in enumerate(NaDdt):
 
         xmax = N * a / 2
         xs = np.linspace(-xmax, xmax, T00.shape[-1])
-        
+
 
 
         vt = 1
-        vx = 2*T01/(T00 + T11 + sqrtreg((T00+T11)**2-4*T01**2))
+        vx = 2*T01 / (T00 + T11 + sqrtreg((T00+T11)**2-4*T01**2))
         norm = np.sqrt(1 + vx**2)
         vt = vt/norm
         vx = vx/norm

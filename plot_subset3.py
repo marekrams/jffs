@@ -32,7 +32,7 @@ colors = [cm(i / NUM_COLORS) for i in range(NUM_COLORS)]
 lines = ['-', '--', ':']
 
 
-# 
+#
 
 def get_tsm(signals, ev):
     tm = signals["time"]
@@ -71,7 +71,7 @@ for j, (N, a, D, dt) in enumerate(NaDdt):
 
         xmax = N * a / 2
         xs = np.linspace(-xmax, xmax, T00.shape[-1])
-        
+
         x = np.zeros_like(T00)
         t = np.zeros_like(T00)
         x[:, :] = xs[np.newaxis, :]
@@ -84,7 +84,7 @@ for j, (N, a, D, dt) in enumerate(NaDdt):
         taumin = 2.5
         selfwd = (3*np.abs(x)<t)
 
-        eps = 1/2*(T00 - T11 + np.sqrt((T00+T11)**2-4*T01**2))
+        # eps = 1/2*(T00 - T11 + np.sqrt((T00+T11)**2-4*T01**2))
         epsreg = 1/2*(T00 - T11 + sqrtreg((T00+T11)**2-4*T01**2))
 
         preg = T11 + epsreg - T00
@@ -134,7 +134,7 @@ for j, (N, a, D, dt) in enumerate(NaDdt):
 
         xmax = N * a / 2
         xs = np.linspace(-xmax, xmax, T00.shape[-1])
-        
+
         x = np.zeros_like(T00)
         t = np.zeros_like(T00)
         x[:, :] = xs[np.newaxis, :]
@@ -147,7 +147,7 @@ for j, (N, a, D, dt) in enumerate(NaDdt):
         taumin = 2.5
         selfwd = (3*np.abs(x)<t)
 
-        eps = 1/2*(T00 - T11 + np.sqrt((T00+T11)**2-4*T01**2))
+        # eps = 1/2*(T00 - T11 + np.sqrt((T00+T11)**2-4*T01**2))
         epsreg = 1/2*(T00 - T11 + sqrtreg((T00+T11)**2-4*T01**2))
 
         preg = T11 + epsreg - T00
